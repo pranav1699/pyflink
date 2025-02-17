@@ -9,6 +9,8 @@ services:
     depends_on:
       - jobmanager
     command: taskmanager
+    volumes:
+      - ./python_code:/python_code
     scale: 1
     environment:
       - |
@@ -25,6 +27,8 @@ services:
     ports:
       - "8082:8082"
     command: jobmanager
+    volumes:
+      - ./python_code:/python_code
     environment:
       - |
         FLINK_PROPERTIES=

@@ -1,9 +1,18 @@
 from pyflink.table import StreamTableEnvironment, DataTypes, EnvironmentSettings, TableDescriptor, Schema
-
+from pyflink.datastream import StreamExecutionEnvironment
 
 def table_api_demo():
-    env_settings = EnvironmentSettings.new_instance().in_streaming_mode().use_blink_planner().build()
-    table_env = StreamTableEnvironment.create(environment_settings=env_settings)
+    env = StreamExecutionEnvironment.get_execution_environment()
+    
+    env.enable_checkpointing(60000) 
+    env.get_checkpoint_config().set_min_pause_between_checkpoints(500)
+    env.get_checkpoint_config().set_checkpoint_timeout(60000)
+    env.get_checkpoint_config().set_max_concurrent_checkpoints(1)
+    
+    env_settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
+    table_env = StreamTableEnvironment.create(env, environment_settings=env_settings)
+    
+    table_env.get_config().set("execution.checkpointing.interval", "3000")
 
     table_env.execute_sql("""
         CREATE TABLE source_table (
@@ -11,10 +20,13 @@ def table_api_demo():
             name STRING,
             description STRING
         ) WITH (
-            'connector' = 'kafka',
-            'topic' = 'source_table',
-            'properties.bootstrap.servers' = 'localhost:9092',
-            'format' = 'json'
+            'connector' = 'datagen',
+            'rows-per-second' = '5',
+            'fields.id.kind' = 'sequence',
+            'fields.id.start' = '1',
+            'fields.id.end' = '1000',
+            'fields.name.length' = '10',
+            'fields.description.length' = '20'
         )
     """)
 
@@ -24,17 +36,19 @@ def table_api_demo():
             name STRING,
             description STRING
         ) WITH (
-            'connector' = 'kafka',
-            'topic' = 'sink_table',
-            'properties.bootstrap.servers' = 'localhost:9092',
-            'format' = 'json'
+            'connector' = 'print'
         )
     """)
 
-    table_env.execute_sql("""
+    statement_set = table_env.create_statement_set()
+    statement_set.add_insert_sql("""
         INSERT INTO sink_table
         SELECT id, name, description
         FROM source_table
     """)
+    
+    statement_set.execute()
 
-    table_env.execute("table_api_demo")
+
+if __name__ == '__main__':
+    table_api_demo()
